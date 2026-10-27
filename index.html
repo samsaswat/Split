@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SplitEase – Split trip bills fairly</title>
+<meta name="description" content="Create trips, add your group, log expenses and see exactly who owes whom. Works offline, free, no sign-up.">
+<meta name="theme-color" content="#6d5dfc">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💸</text></svg>">
+<style>
+:root{
+  --bg:#f4f3ff;--card:#fff;--ink:#1b1b2f;--muted:#6b6b85;--line:#e8e6fa;
+  --pri:#6d5dfc;--pri2:#a45cff;--acc:#ff7a59;--ok:#12a46a;--bad:#e5384f;
+  --soft:#f0eeff;--shadow:0 10px 34px rgba(80,60,200,.10);--r:18px;
+}
+[data-theme=dark]{
+  --bg:#0e0e1b;--card:#181830;--ink:#f1f0fb;--muted:#9d9cba;--line:#2a2a4a;
+  --soft:#222244;--shadow:0 10px 34px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{
+  margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color:var(--ink);background:var(--bg);min-height:100vh;line-height:1.45;
+  background-image:
+    radial-gradient(900px 420px at 10% -10%,rgba(109,93,252,.22),transparent 60%),
+    radial-gradient(700px 380px at 100% 0%,rgba(255,122,89,.16),transparent 60%);
+  background-repeat:no-repeat;
+}
+body.noscroll{overflow:hidden}
+h1,h2,h3{margin:0;line-height:1.2}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:920px;margin:0 auto;padding:0 16px 90px}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+
+/* top bar */
+.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);background:color-mix(in srgb,var(--bg) 78%,transparent);border-bottom:1px solid var(--line)}
+.topbar .in{max-width:920px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.2rem;letter-spacing:-.02em}
+.logo i{font-style:normal;display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--pri),var(--pri2));box-shadow:0 6px 16px rgba(109,93,252,.4)}
+.icon-btn{border:1px solid var(--line);background:var(--card);width:40px;height:40px;border-radius:12px;cursor:pointer;font-size:1.1rem;display:grid;place-items:center;transition:.15s}
+.icon-btn:hover{transform:translateY(-1px);border-color:var(--pri)}
+
+/* buttons */
+.btn{border:0;cursor:pointer;border-radius:14px;padding:12px 18px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.15s;background:var(--soft);color:var(--pri)}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;box-shadow:0 8px 20px rgba(109,93,252,.35)}
+.btn.danger{background:rgba(229,56,79,.12);color:var(--bad)}
+.btn.sm{padding:8px 12px;border-radius:11px;font-size:.88rem}
+.btn.block{width:100%}
+
+/* hero */
+.hero{padding:34px 0 18px}
+.hero h1{font-size:clamp(1.9rem,6vw,2.9rem);font-weight:850;letter-spacing:-.03em}
+.hero h1 span{background:linear-gradient(135deg,var(--pri),var(--acc));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{max-width:560px;margin:10px 0 20px;color:var(--muted);font-size:1.05rem}
+.feat{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.feat span{background:var(--card);border:1px solid var(--line);padding:6px 12px;border-radius:99px;font-size:.82rem;color:var(--muted)}
+
+/* cards */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.trip-card{display:block;transition:.18s;position:relative;overflow:hidden}
+.trip-card:hover{transform:translateY(-3px);border-color:var(--pri)}
+.trip-card .em{font-size:2rem;width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:var(--soft);margin-bottom:12px}
+.trip-card h3{font-size:1.15rem}
+.trip-card .tot{font-size:1.4rem;font-weight:800;margin-top:12px;letter-spacing:-.02em}
+.stack{display:flex;margin-top:10px}
+.stack .av{margin-left:-8px;border:2px solid var(--card)}
+.stack .av:first-child{margin-left:0}
+.empty{text-align:center;padding:44px 20px;border:2px dashed var(--line);border-radius:var(--r);color:var(--muted)}
+.empty .big{font-size:3rem}
+
+/* avatar */
+.av{--h:250;width:34px;height:34px;border-radius:50%;display:inline-grid;place-items:center;font-weight:800;font-size:.85rem;color:#fff;background:linear-gradient(135deg,hsl(var(--h) 75% 58%),hsl(calc(var(--h) + 40) 75% 50%));flex:none}
+.av.lg{width:44px;height:44px;font-size:1rem}
+
+/* trip header */
+.trip-head{padding:20px 0 6px}
+.back{display:inline-block;color:var(--muted);font-weight:600;margin-bottom:10px}
+.back:hover{color:var(--pri)}
+.th-row{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.th-main{display:flex;gap:14px;align-items:center}
+.emoji-lg{font-size:2.2rem;width:62px;height:62px;display:grid;place-items:center;border-radius:18px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow)}
+.th-main h1{font-size:1.6rem;letter-spacing:-.02em}
+.th-actions{display:flex;gap:8px;align-items:center}
+select,input[type=text],input[type=number],input[type=date],textarea{
+  width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;outline:none;transition:.15s}
+select:focus,input:focus,textarea:focus{border-color:var(--pri);box-shadow:0 0 0 4px rgba(109,93,252,.15)}
+.th-actions select{width:auto;padding:9px 10px;font-weight:600}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.stat b{display:block;font-size:1.15rem;letter-spacing:-.01em;word-break:break-word}
+.stat span{font-size:.78rem;color:var(--muted)}
+.stat.hl{background:linear-gradient(135deg,var(--pri),var(--pri2));border:0;color:#fff}
+.stat.hl span{color:rgba(255,255,255,.8)}
+
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);padding:5px;border-radius:16px;margin-bottom:16px;position:sticky;top:64px;z-index:10}
+.tabs a{flex:1;text-align:center;padding:10px 6px;border-radius:12px;font-weight:700;font-size:.92rem;color:var(--muted);transition:.15s}
+.tabs a.on{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;box-shadow:0 6px 16px rgba(109,93,252,.3)}
+
+/* list rows */
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.row .ic{font-size:1.4rem;width:46px;height:46px;border-radius:14px;background:var(--soft);display:grid;place-items:center;flex:none}
+.row .mid{flex:1;min-width:0}
+.row .mid b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .amt{font-weight:800;text-align:right;white-space:nowrap}
+.row .acts{display:flex;gap:4px;margin-left:4px}
+.tiny{border:0;background:transparent;cursor:pointer;padding:6px;border-radius:8px;font-size:1rem;opacity:.65}
+.tiny:hover{opacity:1;background:var(--soft)}
+.pos{color:var(--ok)}.neg{color:var(--bad)}
+
+.info{background:var(--soft);border-radius:16px;padding:14px 16px;font-size:.92rem;color:var(--muted);margin-bottom:14px}
+.add-row{display:flex;gap:8px;margin-bottom:14px}
+.add-row input{flex:1}
+
+/* settle */
+.tx{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;flex-wrap:wrap}
+.tx .who{display:flex;align-items:center;gap:8px;font-weight:700}
+.tx .arrow{color:var(--muted);font-size:1.2rem}
+.tx .grow{flex:1}
+.tx .amt{font-size:1.2rem;font-weight:850;letter-spacing:-.02em}
+.tx.done{opacity:.55}
+.tx.done .amt{text-decoration:line-through}
+.chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;font-size:.88rem;color:var(--muted);user-select:none}
+.chk input{width:18px;height:18px;accent-color:var(--ok)}
+.sec{margin:22px 0 10px;font-size:1.05rem;font-weight:800;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.bar{height:8px;border-radius:99px;background:var(--soft);overflow:hidden;margin-top:6px;display:flex}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:12px;font-size:.85rem}
+.legend span{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.legend s{width:10px;height:10px;border-radius:3px;display:inline-block}
+.allok{text-align:center;padding:30px 16px;border-radius:var(--r);background:linear-gradient(135deg,rgba(18,164,106,.14),rgba(109,93,252,.1));border:1px solid var(--line)}
+.allok .big{font-size:2.6rem}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:100;background:rgba(10,8,30,.55);display:flex;align-items:flex-end;justify-content:center;opacity:0;transition:.2s;backdrop-filter:blur(4px)}
+.modal.show{opacity:1}
+.sheet{background:var(--card);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:26px 26px 0 0;padding:22px 20px 26px;transform:translateY(30px);transition:.25s;box-shadow:0 -10px 50px rgba(0,0,0,.25)}
+.modal.show .sheet{transform:none}
+@media(min-width:640px){.modal{align-items:center}.sheet{border-radius:26px}}
+.sheet h2{font-size:1.3rem;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.f{margin-bottom:14px}
+.f label{display:block;font-weight:700;font-size:.85rem;margin-bottom:6px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:8px 11px;cursor:pointer;font-weight:600;font-size:.9rem;transition:.12s}
+.chip.on{border-color:var(--pri);background:var(--soft);color:var(--pri)}
+.chip.em{font-size:1.4rem;padding:6px 10px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--soft);padding:4px;border-radius:13px;gap:4px}
+.seg button{border:0;background:transparent;padding:9px 4px;border-radius:10px;cursor:pointer;font-weight:700;font-size:.88rem;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--pri);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.part{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line)}
+.part:last-child{border:0}
+.part label{flex:1;display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;color:var(--ink);font-size:1rem}
+.part input[type=checkbox]{width:19px;height:19px;accent-color:var(--pri)}
+.part .pv{width:96px;padding:8px 10px}
+.sum{font-size:.88rem;margin-top:8px;color:var(--muted);font-weight:600}
+.sum.bad{color:var(--bad)}
+.sum.good{color:var(--ok)}
+.foot{display:flex;gap:10px;margin-top:18px}
+.foot .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);background:#1b1b2f;color:#fff;padding:12px 18px;border-radius:14px;font-weight:600;font-size:.92rem;opacity:0;transition:.25s;z-index:200;max-width:90vw;text-align:center;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.fab{position:fixed;right:max(18px,calc(50% - 440px));bottom:22px;z-index:30;box-shadow:0 12px 28px rgba(109,93,252,.5);padding:15px 22px;border-radius:99px}
+footer{margin-top:40px;text-align:center;color:var(--muted);font-size:.85rem}
+footer .btn{margin:4px}
+@media(max-width:520px){.stats{gap:8px}.stat{padding:10px}.stat b{font-size:1rem}.row .acts{flex-direction:column}.tabs{top:62px}}
+@media print{.topbar,.tabs,.fab,.acts,footer,.th-actions,.back{display:none!important}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="in">
+  <a class="logo" href="#/"><i>💸</i>SplitEase</a>
+  <button class="icon-btn" data-act="theme" title="Toggle dark mode" aria-label="Toggle dark mode">🌓</button>
+</div></div>
+<main class="wrap" id="app"></main>
+<input type="file" id="importFile" accept="application/json" hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- constants ---------- */
+const CATS=[['🍽️','Food'],['🍹','Drinks'],['🚕','Transport'],['⛽','Fuel'],['🏨','Stay'],['🎟️','Activities'],['🛒','Shopping'],['📦','Other']];
+const CAT_COL=['#6d5dfc','#ff7a59','#12a46a','#f5b301','#e5384f','#2bb5e8','#c04bd9','#8a8aa8'];
+const EMOJIS=['✈️','🏖️','🏔️','🚗','🏕️','🎉','🍕','🏠'];
+const CURS={ // code: [name, fallback rate per 1 INR]
+  INR:['Indian Rupee (₹)',1],USD:['US Dollar ($)',0.0113],EUR:['Euro (€)',0.0104],GBP:['British Pound (£)',0.0089],
+  AED:['UAE Dirham',0.0415],SGD:['Singapore Dollar',0.0147],THB:['Thai Baht',0.37],MYR:['Malaysian Ringgit',0.048],
+  IDR:['Indonesian Rupiah',185],JPY:['Japanese Yen',1.7],KRW:['South Korean Won',16],CNY:['Chinese Yuan',0.082],
+  HKD:['Hong Kong Dollar',0.088],AUD:['Australian Dollar',0.0174],NZD:['New Zealand Dollar',0.019],CAD:['Canadian Dollar',0.0158],
+  CHF:['Swiss Franc',0.0100],SAR:['Saudi Riyal',0.0424],LKR:['Sri Lankan Rupee',3.4],NPR:['Nepalese Rupee',1.6],
+  BDT:['Bangladeshi Taka',1.37],ZAR:['South African Rand',0.2]
+};
+const ZERO=new Set(['JPY','KRW','IDR']);
+
+/* ---------- helpers ---------- */
+const $=(s,el=document)=>el.querySelector(s);
+const $$=(s,el=document)=>[...el.querySelectorAll(s)];
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const app=$('#app');
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('show'),2300)}
+const hue=n=>{let h=0;for(const c of String(n))h=(h*31+c.charCodeAt(0))%360;return h};
+const av=(name,cls='')=>`<span class="av ${cls}" style="--h:${hue(name)}">${esc((name||'?').trim().charAt(0).toUpperCase())}</span>`;
+
+/* ---------- state ---------- */
+const KEY='splitease.v1';
+let S=(function(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.trips))return d}catch(e){}return{trips:[],theme:''}})();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Could not save – storage is full or blocked')}}
+const getTrip=id=>S.trips.find(t=>t.id===id);
+
+/* ---------- theme ---------- */
+function applyTheme(){
+  const dark=S.theme?S.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+}
+applyTheme();
+
+/* ---------- currency ---------- */
+const rates={};Object.keys(CURS).forEach(k=>rates[k]=CURS[k][1]);
+let rateInfo='Approximate offline rates';
+try{const c=JSON.parse(localStorage.getItem('splitease.rates'));if(c&&c.rates){Object.assign(rates,c.rates);rateInfo='Rates updated '+new Date(c.t).toLocaleDateString()}}catch(e){}
+async function fetchRates(){
+  try{
+    const r=await fetch('https://open.er-api.com/v6/latest/INR');
+    const j=await r.json();
+    if(j&&j.rates){
+      const keep={};Object.keys(CURS).forEach(k=>{if(j.rates[k]){rates[k]=j.rates[k];keep[k]=j.rates[k]}});
+      localStorage.setItem('splitease.rates',JSON.stringify({t:Date.now(),rates:keep}));
+      rateInfo='Live rates · '+new Date().toLocaleDateString();
+      if(!$('.modal'))route();
+    }
+  }catch(e){}
+}
+const rate=c=>rates[c]||1;
+const toDisp=(p,c)=>p/100*rate(c);
+const toPaise=(x,c)=>Math.round(x/rate(c)*100);
+function fmt(p,c){
+  const v=toDisp(p,c);
+  const whole=ZERO.has(c)||Math.abs(v-Math.round(v))<0.005;
+  try{return new Intl.NumberFormat(c==='INR'?'en-IN':'en-US',{style:'currency',currency:c,minimumFractionDigits:whole?0:2,maximumFractionDigits:whole?0:2}).format(v)}
+  catch(e){return c+' '+v.toFixed(2)}
+}
+const inputVal=(p,c)=>{const v=toDisp(p,c);return ZERO.has(c)?String(Math.round(v)):String(+v.toFixed(2))};
+const curSymbol=c=>{try{return new Intl.NumberFormat('en',{style:'currency',currency:c}).formatToParts(0).find(p=>p.type==='currency').value}catch(e){return c}};
+
+/* ---------- split maths (all in paise of INR) ---------- */
+function owed(e){
+  const o={},sp=e.split,ids=sp.ids||[];
+  if(!ids.length)return o;
+  if(sp.type==='exact'){ids.forEach(id=>o[id]=(sp.vals&&sp.vals[id])||0);return o}
+  const w=ids.map(id=>sp.type==='shares'?(+(sp.w&&sp.w[id])||0):1);
+  const tw=w.reduce((a,b)=>a+b,0)||1;
+  let used=0;
+  ids.forEach((id,i)=>{const v=Math.floor(e.amt*w[i]/tw);o[id]=v;used+=v});
+  let rem=e.amt-used,i=0;
+  while(rem>0){if(w[i%ids.length]>0){o[ids[i%ids.length]]++;rem--}i++}
+  return o;
+}
+function balances(t){
+  const b={};t.members.forEach(m=>b[m.id]={paid:0,owes:0});
+  t.expenses.forEach(e=>{
+    if(b[e.payer])b[e.payer].paid+=e.amt;
+    const o=owed(e);for(const id in o)if(b[id])b[id].owes+=o[id];
+  });
+  return b;
+}
+function txns(t){
+  const b=balances(t),cr=[],db=[];
+  t.members.forEach(m=>{const n=b[m.id].paid-b[m.id].owes;if(n>0)cr.push({id:m.id,n});else if(n<0)db.push({id:m.id,n:-n})});
+  cr.sort((a,b)=>b.n-a.n);db.sort((a,b)=>b.n-a.n);
+  const out=[];let i=0,j=0;
+  while(i<db.length&&j<cr.length){
+    const x=Math.min(db[i].n,cr[j].n);
+    if(x>0)out.push({from:db[i].id,to:cr[j].id,amt:x});
+    db[i].n-=x;cr[j].n-=x;
+    if(db[i].n===0)i++;if(cr[j].n===0)j++;
+  }
+  return out;
+}
+const txKey=x=>x.from+'>'+x.to+':'+x.amt;
+const total=t=>t.expenses.reduce((a,e)=>a+e.amt,0);
+const nm=(t,id)=>{const m=t.members.find(m=>m.id===id);return m?m.name:'Someone'};
+
+/* ---------- modal ---------- */
+function modal(html){
+  closeModal();
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML='<div class="sheet" role="dialog" aria-modal="true">'+html+'</div>';
+  m.addEventListener('mousedown',e=>{if(e.target===m)closeModal()});
+  document.body.appendChild(m);document.body.classList.add('noscroll');
+  requestAnimationFrame(()=>m.classList.add('show'));
+  return m.firstElementChild;
+}
+function closeModal(){const m=$('.modal');if(m)m.remove();document.body.classList.remove('noscroll')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+/* ---------- router ---------- */
+let curTab='expenses';
+function route(){
+  const h=location.hash.replace(/^#\/?/,'').split('/');
+  if(h[0]==='trip'&&getTrip(h[1])){curTab=['expenses','people','settle'].includes(h[2])?h[2]:'expenses';renderTrip(getTrip(h[1]),curTab)}
+  else renderHome();
+}
+window.addEventListener('hashchange',()=>{closeModal();route();window.scrollTo(0,0)});
+
+/* ---------- home ---------- */
+function renderHome(){
+  const cards=S.trips.map(t=>`
+    <a class="card trip-card" href="#/trip/${t.id}">
+      <div class="em">${esc(t.emoji)}</div>
+      <h3>${esc(t.name)}</h3>
+      <div class="muted small">${t.members.length} ${t.members.length===1?'person':'people'} · ${t.expenses.length} expense${t.expenses.length===1?'':'s'}</div>
+      <div class="tot">${fmt(total(t),t.cur)}</div>
+      <div class="stack">${t.members.slice(0,6).map(m=>av(m.name)).join('')}${t.members.length>6?`<span class="av" style="--h:250">+${t.members.length-6}</span>`:''}</div>
+    </a>`).join('');
+  app.innerHTML=`
+    <section class="hero">
+      <h1>Split trip bills,<br><span>stress-free.</span></h1>
+      <p>Create a trip, add everyone who's coming, log expenses as you go – and at the end see exactly who pays whom, in the fewest payments.</p>
+      <button class="btn primary" data-act="new-trip">＋ New trip</button>
+      <div class="feat"><span>👥 Any group size</span><span>₹ INR by default</span><span>🌍 22 currencies</span><span>🔒 Private – stays on your device</span></div>
+    </section>
+    ${S.trips.length?`<div class="sec"><span>Your trips</span></div><div class="grid">${cards}</div>`:
+      `<div class="empty"><div class="big">🧳</div><h3>No trips yet</h3><p>Start one – Goa, Manali, a weekend road trip, anything!</p></div>`}
+    <footer>
+      <div>
+        <button class="btn sm" data-act="export">⬇ Export backup</button>
+        <button class="btn sm" data-act="import">⬆ Import backup</button>
+      </div>
+      <p>Data is saved in this browser only. Export a backup to move it between devices.</p>
+    </footer>`;
+}
+
+/* ---------- new / edit trip ---------- */
+function curOptions(sel){return Object.keys(CURS).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${k} – ${esc(CURS[k][0])}</option>`).join('')}
+function tripModal(t){
+  let emoji=t?t.emoji:EMOJIS[0];
+  const s=modal(`
+    <h2>${t?'Trip settings':'New trip'}<button class="tiny" data-act="close">✕</button></h2>
+    <form>
+      <div class="f"><label>Trip name</label><input type="text" name="name" placeholder="e.g. Goa Trip 2026" maxlength="60" required value="${t?esc(t.name):''}"></div>
+      <div class="f"><label>Icon</label><div class="chips" id="emojis">${EMOJIS.map(e=>`<button type="button" class="chip em ${e===emoji?'on':''}" data-e="${e}">${e}</button>`).join('')}</div></div>
+      ${t?'':`
+      <div class="f"><label>Currency</label><select name="cur">${curOptions('INR')}</select></div>
+      <div class="f"><label>Who's coming? <span style="font-weight:500">(optional – separate names with commas or new lines)</span></label>
+        <textarea name="people" rows="3" placeholder="Aarav, Priya, Rohan, Sneha"></textarea>
+        <div class="muted small" style="margin-top:6px">The group decides how many people – you can add or remove anyone later.</div></div>`}
+      <div class="foot">
+        ${t?'<button type="button" class="btn danger" data-del>Delete trip</button>':''}
+        <button class="btn primary" type="submit">${t?'Save':'Create trip'}</button>
+      </div>
+    </form>`);
+  $('#emojis',s).addEventListener('click',e=>{const b=e.target.closest('[data-e]');if(!b)return;emoji=b.dataset.e;$$('#emojis .chip',s).forEach(c=>c.classList.toggle('on',c===b))});
+  const del=$('[data-del]',s);
+  if(del)del.onclick=()=>{if(confirm('Delete "'+t.name+'" and all its expenses? This cannot be undone.')){S.trips=S.trips.filter(x=>x.id!==t.id);save();closeModal();location.hash='#/'}};
+  $('form',s).onsubmit=ev=>{
+    ev.preventDefault();
+    const f=ev.target,name=f.name.value.trim();if(!name)return;
+    if(t){t.name=name;t.emoji=emoji;save();closeModal();route();toast('Saved')}
+    else{
+      const names=[...new Set((f.people.value||'').split(/[,\n]/).map(x=>x.trim()).filter(Boolean))];
+      const nt={id:uid(),name,emoji,cur:f.cur.value,created:Date.now(),members:names.map(n=>({id:uid(),name:n})),expenses:[],settled:[]};
+      S.trips.unshift(nt);save();closeModal();location.hash='#/trip/'+nt.id+(nt.members.length?'/expenses':'/people');
+    }
+  };
+  setTimeout(()=>$('input[name=name]',s).focus(),150);
+}
+
+/* ---------- trip page ---------- */
+function renderTrip(t,tab){
+  const tot=total(t),n=t.members.length;
+  const pending=txns(t).filter(x=>!(t.settled||[]).includes(txKey(x))).length;
+  app.innerHTML=`
+    <div class="trip-head">
+      <a class="back" href="#/">← All trips</a>
+      <div class="th-row">
+        <div class="th-main"><div class="emoji-lg">${esc(t.emoji)}</div>
+          <div><h1>${esc(t.name)}</h1><div class="muted small">${n} ${n===1?'person':'people'} · ${esc(rateInfo)}</div></div></div>
+        <div class="th-actions">
+          <select data-change="currency" aria-label="Currency">${curOptions(t.cur)}</select>
+          <button class="icon-btn" data-act="trip-menu" aria-label="Trip settings">⚙️</button>
+        </div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat hl"><b>${fmt(tot,t.cur)}</b><span>Total spent</span></div>
+      <div class="stat"><b>${n?fmt(Math.round(tot/n),t.cur):'—'}</b><span>Average per person</span></div>
+      <div class="stat"><b>${pending}</b><span>Payments pending</span></div>
+    </div>
+    <nav class="tabs">
+      <a href="#/trip/${t.id}/expenses" class="${tab==='expenses'?'on':''}">🧾 Expenses</a>
+      <a href="#/trip/${t.id}/people" class="${tab==='people'?'on':''}">👥 People</a>
+      <a href="#/trip/${t.id}/settle" class="${tab==='settle'?'on':''}">🤝 Settle up</a>
+    </nav>
+    <div id="tabBody">${tab==='people'?tabPeople(t):tab==='settle'?tabSettle(t):tabExpenses(t)}</div>
+    ${tab==='expenses'?`<button class="btn primary fab" data-act="add-exp">＋ Add expense</button>`:''}`;
+}
+
+function tabExpenses(t){
+  if(!t.expenses.length)return `<div class="empty"><div class="big">🧾</div><h3>No expenses yet</h3>
+    <p>${t.members.length<2?'First add the people on this trip, then log what you spend.':'Tap “Add expense” to log your first bill.'}</p>
+    ${t.members.length<2?`<a class="btn primary" href="#/trip/${t.id}/people">👥 Add people</a>`:''}</div>`;
+  const list=[...t.expenses].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.created-a.created);
+  return `<div class="list">${list.map(e=>{
+    const o=owed(e),cnt=Object.keys(o).length,c=CATS.find(c=>c[1]===e.cat)||CATS[7];
+    const d=e.date?new Date(e.date+'T00:00').toLocaleDateString(undefined,{day:'numeric',month:'short'}):'';
+    return `<div class="row"><div class="ic">${c[0]}</div>
+      <div class="mid"><b>${esc(e.desc)}</b><span class="muted small">${esc(nm(t,e.payer))} paid · ${cnt===t.members.length?'everyone':cnt+' '+(cnt===1?'person':'people')}${d?' · '+d:''}</span></div>
+      <div class="amt">${fmt(e.amt,t.cur)}</div>
+      <div class="acts"><button class="tiny" data-act="edit-exp" data-id="${e.id}" title="Edit">✏️</button><button class="tiny" data-act="del-exp" data-id="${e.id}" title="Delete">🗑️</button></div></div>`}).join('')}</div>`;
+}
+
+function tabPeople(t){
+  const b=balances(t);
+  return `
+    <div class="info">💬 <b>How many people?</b> Decide with your group – add everyone who's joining. You can also split any single expense among just some of them.</div>
+    <form class="add-row" data-form="add-member"><input type="text" name="n" placeholder="Register a name (e.g. Priya)" maxlength="40" autocomplete="off"><button class="btn primary" type="submit">Add</button></form>
+    ${t.members.length?`<div class="list">${t.members.map(m=>`
+      <div class="row">${av(m.name,'lg')}
+        <div class="mid"><b>${esc(m.name)}</b><span class="muted small">Paid ${fmt(b[m.id].paid,t.cur)} · Share ${fmt(b[m.id].owes,t.cur)}</span></div>
+        <div class="acts"><button class="tiny" data-act="ren-member" data-id="${m.id}" title="Rename">✏️</button><button class="tiny" data-act="rm-member" data-id="${m.id}" title="Remove">🗑️</button></div></div>`).join('')}</div>`:
+    `<div class="empty"><div class="big">👋</div><h3>Nobody here yet</h3><p>Add the first name above.</p></div>`}`;
+}
+
+function tabSettle(t){
+  if(!t.expenses.length)return `<div class="empty"><div class="big">🤝</div><h3>Nothing to settle</h3><p>Add some expenses first.</p></div>`;
+  const b=balances(t),tx=txns(t),done=t.settled||[];
+  const left=tx.filter(x=>!done.includes(txKey(x))).length;
+  const maxAbs=Math.max(1,...t.members.map(m=>Math.abs(b[m.id].paid-b[m.id].owes)));
+  const bycat={};t.expenses.forEach(e=>bycat[e.cat||'Other']=(bycat[e.cat||'Other']||0)+e.amt);
+  const tot=total(t);
+  const catRows=CATS.filter(c=>bycat[c[1]]);
+  return `
+    ${tx.length?`
+    <div class="sec"><span>Who pays whom</span><span class="muted small">${left?left+' to go':'All paid 🎉'}</span></div>
+    <div class="list">${tx.map(x=>{const k=txKey(x),d=done.includes(k);return `
+      <div class="tx ${d?'done':''}">
+        <div class="who">${av(nm(t,x.from))}${esc(nm(t,x.from))}</div><span class="arrow">→</span>
+        <div class="who">${av(nm(t,x.to))}${esc(nm(t,x.to))}</div><span class="grow"></span>
+        <div class="amt">${fmt(x.amt,t.cur)}</div>
+        <label class="chk"><input type="checkbox" data-change="paid" data-k="${esc(k)}" ${d?'checked':''}>Paid</label>
+      </div>`}).join('')}</div>
+    <div class="foot"><button class="btn" data-act="share">📤 Share summary</button><button class="btn" data-act="print">🖨️ Print</button></div>`:
+    `<div class="allok"><div class="big">✅</div><h3>Everyone's even!</h3><p class="muted">No one owes anyone anything.</p></div>`}
+
+    <div class="sec"><span>Balances</span></div>
+    <div class="list">${t.members.map(m=>{const net=b[m.id].paid-b[m.id].owes;return `
+      <div class="row">${av(m.name)}
+        <div class="mid"><b>${esc(m.name)}</b><span class="muted small">Paid ${fmt(b[m.id].paid,t.cur)} · Share ${fmt(b[m.id].owes,t.cur)}</span>
+          <div class="bar"><i style="width:${Math.abs(net)/maxAbs*100}%;background:${net>=0?'var(--ok)':'var(--bad)'}"></i></div></div>
+        <div class="amt ${net>0?'pos':net<0?'neg':''}">${net>0?'gets ':net<0?'owes ':''}${fmt(Math.abs(net),t.cur)}</div></div>`}).join('')}</div>
+
+    <div class="sec"><span>Where the money went</span></div>
+    <div class="card">
+      <div class="bar" style="height:14px">${catRows.map(c=>`<i style="width:${bycat[c[1]]/tot*100}%;background:${CAT_COL[CATS.indexOf(c)]}"></i>`).join('')}</div>
+      <div class="legend">${catRows.map(c=>`<span><s style="background:${CAT_COL[CATS.indexOf(c)]}"></s>${c[0]} ${c[1]} · ${fmt(bycat[c[1]],t.cur)} (${Math.round(bycat[c[1]]/tot*100)}%)</span>`).join('')}</div>
+    </div>`;
+}
+
+/* ---------- expense modal ---------- */
+function expenseModal(t,eid){
+  if(t.members.length<2){toast('Add at least 2 people first');location.hash='#/trip/'+t.id+'/people';return}
+  const e=eid?t.expenses.find(x=>x.id===eid):null,cur=t.cur;
+  const st={type:e?e.split.type:'equal',sel:new Set(e?e.split.ids:t.members.map(m=>m.id)),w:{},vals:{},cat:e?e.cat:'Food'};
+  t.members.forEach(m=>{
+    st.w[m.id]=e&&e.split.w&&e.split.w[m.id]?String(e.split.w[m.id]):'1';
+    st.vals[m.id]=e&&e.split.vals&&e.split.vals[m.id]!=null?inputVal(e.split.vals[m.id],cur):'';
+  });
+  const s=modal(`
+    <h2>${e?'Edit expense':'Add expense'}<button class="tiny" data-act="close">✕</button></h2>
+    <form>
+      <div class="f"><label>What was it for?</label><input type="text" name="desc" maxlength="80" placeholder="Dinner at the beach shack" required value="${e?esc(e.desc):''}"></div>
+      <div class="two">
+        <div class="f"><label>Amount (${esc(cur)} ${esc(curSymbol(cur))})</label><input type="number" name="amt" inputmode="decimal" step="any" min="0" placeholder="0" required value="${e?inputVal(e.amt,cur):''}"></div>
+        <div class="f"><label>Date</label><input type="date" name="date" value="${e?e.date||today():today()}"></div>
+      </div>
+      <div class="f"><label>Category</label><div class="chips" id="cats">${CATS.map(c=>`<button type="button" class="chip ${c[1]===st.cat?'on':''}" data-c="${c[1]}">${c[0]} ${c[1]}</button>`).join('')}</div></div>
+      <div class="f"><label>Paid by</label><select name="payer">${t.members.map(m=>`<option value="${m.id}" ${e&&e.payer===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>
+      <div class="f"><label>Split</label>
+        <div class="seg" id="seg"><button type="button" data-t="equal">Equally</button><button type="button" data-t="shares">By shares</button><button type="button" data-t="exact">Exact amounts</button></div></div>
+      <div class="f"><div id="parts"></div><div class="sum" id="sum"></div></div>
+      <div class="foot"><button class="btn" type="button" data-act="close">Cancel</button><button class="btn primary" type="submit">${e?'Save changes':'Add expense'}</button></div>
+    </form>`);
+  const form=$('form',s),amtEl=form.amt;
+  function parts(){
+    $$('#seg button',s).forEach(b=>b.classList.toggle('on',b.dataset.t===st.type));
+    $('#parts',s).innerHTML=`<div class="muted small" style="margin-bottom:4px">Who's sharing this? <a href="#" data-all style="color:var(--pri);font-weight:700">All</a> · <a href="#" data-none style="color:var(--pri);font-weight:700">None</a></div>`+
+      t.members.map(m=>`<div class="part"><label><input type="checkbox" data-id="${m.id}" ${st.sel.has(m.id)?'checked':''}>${av(m.name)}${esc(m.name)}</label>
+        ${st.type==='shares'&&st.sel.has(m.id)?`<input class="pv" type="number" min="0" step="any" inputmode="decimal" data-w="${m.id}" value="${esc(st.w[m.id])}" aria-label="Shares">`:''}
+        ${st.type==='exact'&&st.sel.has(m.id)?`<input class="pv" type="number" min="0" step="any" inputmode="decimal" data-v="${m.id}" placeholder="0" value="${esc(st.vals[m.id])}" aria-label="Amount">`:''}</div>`).join('');
+    summary();
+  }
+  function summary(){
+    const el=$('#sum',s),total=parseFloat(amtEl.value)||0,ids=[...st.sel];
+    el.className='sum';
+    if(!ids.length){el.textContent='Pick at least one person.';el.classList.add('bad');return}
+    if(st.type==='equal'){el.textContent=total>0?`${new Intl.NumberFormat('en-IN',{maximumFractionDigits:2}).format(total/ids.length)} ${cur} each · ${ids.length} ${ids.length===1?'person':'people'}`:`${ids.length} ${ids.length===1?'person':'people'} sharing equally`}
+    else if(st.type==='shares'){const tw=ids.reduce((a,id)=>a+(+st.w[id]||0),0);el.textContent=`${tw} total share${tw===1?'':'s'}`;if(!tw)el.classList.add('bad')}
+    else{const sum=ids.reduce((a,id)=>a+(parseFloat(st.vals[id])||0),0),diff=+(total-sum).toFixed(2);
+      if(Math.abs(diff)<0.01*Math.max(1,ids.length)){el.textContent='✓ Amounts add up';el.classList.add('good')}
+      else{el.textContent=(diff>0?'Remaining to assign: ':'Over by: ')+Math.abs(diff)+' '+cur;el.classList.add('bad')}}
+  }
+  parts();
+  $('#cats',s).addEventListener('click',ev=>{const b=ev.target.closest('[data-c]');if(!b)return;st.cat=b.dataset.c;$$('#cats .chip',s).forEach(c=>c.classList.toggle('on',c===b))});
+  $('#seg',s).addEventListener('click',ev=>{const b=ev.target.closest('[data-t]');if(!b)return;st.type=b.dataset.t;parts()});
+  $('#parts',s).addEventListener('click',ev=>{
+    if(ev.target.matches('[data-all]')){ev.preventDefault();t.members.forEach(m=>st.sel.add(m.id));parts()}
+    if(ev.target.matches('[data-none]')){ev.preventDefault();st.sel.clear();parts()}
+  });
+  $('#parts',s).addEventListener('change',ev=>{const id=ev.target.dataset.id;if(!id)return;ev.target.checked?st.sel.add(id):st.sel.delete(id);parts()});
+  $('#parts',s).addEventListener('input',ev=>{
+    if(ev.target.dataset.w)st.w[ev.target.dataset.w]=ev.target.value;
+    if(ev.target.dataset.v)st.vals[ev.target.dataset.v]=ev.target.value;
+    summary();
+  });
+  amtEl.addEventListener('input',summary);
+  form.onsubmit=ev=>{
+    ev.preventDefault();
+    const desc=form.desc.value.trim(),a=parseFloat(form.amt.value);
+    if(!desc)return toast('Add a description');
+    if(!(a>0))return toast('Enter an amount greater than 0');
+    const amt=toPaise(a,cur);if(amt<1)return toast('Amount is too small');
+    const ids=t.members.map(m=>m.id).filter(id=>st.sel.has(id));
+    if(!ids.length)return toast('Pick at least one person to split with');
+    const split={type:st.type,ids};
+    if(st.type==='shares'){
+      split.w={};let tw=0;
+      ids.forEach(id=>{const v=parseFloat(st.w[id])||0;split.w[id]=v;tw+=v});
+      if(tw<=0)return toast('Give at least one person a share');
+    }
+    if(st.type==='exact'){
+      split.vals={};let sum=0;
+      ids.forEach(id=>{const v=toPaise(parseFloat(st.vals[id])||0,cur);split.vals[id]=v;sum+=v});
+      const diff=amt-sum;
+      if(Math.abs(diff)>Math.max(2,ids.length))return toast('Exact amounts must add up to the total');
+      split.vals[ids[ids.length-1]]+=diff;
+    }
+    const rec={id:e?e.id:uid(),desc,amt,cat:st.cat,date:form.date.value||today(),payer:form.payer.value,split,created:e?e.created:Date.now()};
+    if(e)Object.assign(e,rec);else t.expenses.push(rec);
+    save();closeModal();route();toast(e?'Expense updated':'Expense added ✓');
+  };
+  setTimeout(()=>form.desc.focus(),150);
+}
+
+/* ---------- share text ---------- */
+function summaryText(t){
+  const tx=txns(t);
+  let s=`${t.emoji} ${t.name} – settle up\nTotal: ${fmt(total(t),t.cur)} · ${t.members.length} people\n\n`;
+  s+=tx.length?tx.map(x=>`• ${nm(t,x.from)} pays ${nm(t,x.to)} ${fmt(x.amt,t.cur)}`).join('\n'):'Everyone is settled up 🎉';
+  return s+'\n\nSplit with SplitEase';
+}
+
+/* ---------- actions ---------- */
+const tripId=()=>location.hash.replace(/^#\/?/,'').split('/')[1];
+const ACT={
+  theme(){const dark=document.documentElement.getAttribute('data-theme')==='dark';S.theme=dark?'light':'dark';save();applyTheme()},
+  close(){closeModal()},
+  'new-trip'(){tripModal(null)},
+  'trip-menu'(){tripModal(getTrip(tripId()))},
+  'add-exp'(){expenseModal(getTrip(tripId()))},
+  'edit-exp'(el){expenseModal(getTrip(tripId()),el.dataset.id)},
+  'del-exp'(el){const t=getTrip(tripId());const e=t.expenses.find(x=>x.id===el.dataset.id);
+    if(e&&confirm('Delete "'+e.desc+'"?')){t.expenses=t.expenses.filter(x=>x.id!==e.id);save();route();toast('Deleted')}},
+  'rm-member'(el){const t=getTrip(tripId()),m=t.members.find(x=>x.id===el.dataset.id);if(!m)return;
+    const used=t.expenses.some(e=>e.payer===m.id||(e.split.ids||[]).includes(m.id));
+    if(used)return toast(m.name+' is part of some expenses – delete or edit those first');
+    if(confirm('Remove '+m.name+'?')){t.members=t.members.filter(x=>x.id!==m.id);save();route()}},
+  'ren-member'(el){const t=getTrip(tripId()),m=t.members.find(x=>x.id===el.dataset.id);if(!m)return;
+    const n=(prompt('Rename',m.name)||'').trim();if(n){m.name=n.slice(0,40);save();route()}},
+  async share(){const t=getTrip(tripId()),text=summaryText(t);
+    try{if(navigator.share){await navigator.share({title:t.name,text});return}}catch(e){if(e&&e.name==='AbortError')return}
+    try{await navigator.clipboard.writeText(text);toast('Summary copied – paste it in your group chat')}
+    catch(e){prompt('Copy this summary:',text)}},
+  print(){window.print()},
+  export(){
+    const blob=new Blob([JSON.stringify({app:'splitease',v:1,trips:S.trips},null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='splitease-backup-'+today()+'.json';
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  },
+  import(){$('#importFile').click()}
+};
+const CHG={
+  currency(el){const t=getTrip(tripId());t.cur=el.value;save();route();toast('Showing amounts in '+el.value)},
+  paid(el){const t=getTrip(tripId());t.settled=t.settled||[];const k=el.dataset.k;
+    t.settled=el.checked?[...new Set([...t.settled,k])]:t.settled.filter(x=>x!==k);save();route()}
+};
+const FRM={
+  'add-member'(f){
+    const t=getTrip(tripId()),names=f.n.value.split(',').map(x=>x.trim()).filter(Boolean);
+    if(!names.length)return;
+    let added=0;
+    names.forEach(n=>{if(t.members.some(m=>m.name.toLowerCase()===n.toLowerCase()))return toast(n+' is already in the group');t.members.push({id:uid(),name:n.slice(0,40)});added++});
+    if(added){save();route();const i=$('[name=n]');if(i)i.focus()}
+  }
+};
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&ACT[el.dataset.act]){e.preventDefault();ACT[el.dataset.act](el,e)}});
+document.addEventListener('change',e=>{const el=e.target.closest('[data-change]');if(el&&CHG[el.dataset.change])CHG[el.dataset.change](el,e)});
+document.addEventListener('submit',e=>{const f=e.target.closest('[data-form]');if(f&&FRM[f.dataset.form]){e.preventDefault();FRM[f.dataset.form](f)}});
+$('#importFile').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);if(!d||!Array.isArray(d.trips))throw 0;
+      const ok=d.trips.filter(t=>t&&t.id&&t.name&&Array.isArray(t.members)&&Array.isArray(t.expenses));
+      ok.forEach(t=>{t.cur=CURS[t.cur]?t.cur:'INR';t.emoji=t.emoji||'✈️';t.settled=t.settled||[];
+        const i=S.trips.findIndex(x=>x.id===t.id);if(i>=0)S.trips[i]=t;else S.trips.push(t)});
+      save();route();toast('Imported '+ok.length+' trip'+(ok.length===1?'':'s'));
+    }catch(err){toast('That file is not a valid SplitEase backup')}
+    e.target.value='';
+  };
+  r.readAsText(file);
+});
+
+route();
+fetchRates();
+})();
+</script>
+</body>
+</html>
